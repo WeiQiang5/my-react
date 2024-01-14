@@ -24,23 +24,83 @@ export function createElement(type, props, ...children) {
 }
 
 export function render(el, container) {
-  const dom =
-    el.type === TEXT_ELEMENT
-      ? document.createTextNode("")
-      : document.createElement(el.type);
+  nextWorkOfUnit = {
+    dom:container,
+    props:{
+      children:[el]
+    }
+  };
+  
+}
+let nextWorkOfUnit = null;
+function workLoop(deadline) {
+  let shouldYield = false;
+  while (!shouldYield && nextWorkOfUnit) {
+    nextWorkOfUnit = performWorkOfUnit(nextWorkOfUnit);
+    shouldYield = deadline.timeRemaining() < 1;
+  }
+  requestIdleCallback(workLoop);
+}
+requestIdleCallback(workLoop);
 
-  Object.keys(el.props).forEach((key) => {
+function initChildren(work){
+  // 形成链表结构
+  let prevChild = null;
+  const children = work.props.children;
+  children.forEach((child,index) =>{
+
+    const newWork = {
+      type: child.type,
+      props: child.props,
+      child: null,
+      parent: work,
+      sibling: null,
+      dom: null,
+    }
+    
+    if (index === 0) {
+      work.child = newWork;
+    } else {
+      prevChild.sibling = newWork;
+    }
+    prevChild = newWork;
+  })
+}
+
+function createDom(type){
+  return type === TEXT_ELEMENT
+  ? document.createTextNode("")
+  : document.createElement(type)
+}
+function updateProps(dom,props){
+  Object.keys(props).forEach((key) => {
     if (key === "children") return;
-    dom[key] = el.props[key];
+    dom[key] = props[key];
   });
+}
 
+function performWorkOfUnit(work) {
+  console.log(work);
+  if(!work.dom){
+    const dom = (work.dom =createDom(work.type))
+    console.log('dom', dom);
+      
+    work.parent.dom.append(dom);
 
-  const children = el.props.children;
-  children.forEach((child) => {
-    render(child, dom);
-  });
+    updateProps(dom,work.props)
+  }
+  
 
-  container.append(dom);
+  initChildren(work)
+  
+
+  if (work.child) {
+    return work.child;
+  }
+  if (work.sibling) {
+    return work.sibling;
+  }
+  return work.parent?.sibling;
 }
 
 const React = {
